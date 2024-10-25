@@ -207,7 +207,7 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
     }
 
     val l1_stateArray = Seq.fill(nrL2)(WireDefault(VecInit.fill(2, 2)(0.U(2.W))))
-    val l1_tagArray = Seq.fill(nrL2)(WireDefault(VecInit.fill(2, 2)(0.U(2.W))))
+    val l1_tagArray = Seq.fill(nrL2)(WireDefault(VecInit.fill(2, 2)(0.U(3.W))))
     
     val l2_stateArray = Seq.fill(nrL2)(WireDefault(VecInit.fill(4, 2)(0.U(2.W))))
     val l2_tagArray = Seq.fill(nrL2)(WireDefault(VecInit.fill(4, 2)(0.U(2.W))))
@@ -227,19 +227,26 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
 
     def l2_mutual(addr: UInt, state1: UInt, state2: UInt): Unit = {
       val (tag, set, offset) = parseL2Address(addr)
-      val match_tag0 = l2_tagArray(0)(set).map(_ === tag)
-      val match_tag1 = l2_tagArray(1)(set).map(_ === tag)
-      val hit0 = match_tag0.reduce(_ || _)
-      val hit1 = match_tag1.reduce(_ || _)
-      val way0 = MuxCase(0.U, match_tag0.zipWithIndex.map {
-        case (matched, indx) =>
-          matched -> indx.U
-      })
 
-      val way1 = MuxCase(0.U, match_tag1.zipWithIndex.map {
-        case (matched, indx) =>
-          matched -> indx.U
-      })
+      val l1_hit_vec_0 = l1_tagArray(0)(set).zip(l1_stateArray(0)(set)).map {
+        case (l1_tag, l1_state) =>
+          tag === l1_tag && l1_state =/= MetaData.INVALID
+      }
+
+      val hit0 = l1_hit_vec_0.reduce(_ || _)
+      val way0 = OHToUInt(l1_hit_vec_0)
+
+      val l1_hit_vec_1 = l1_tagArray(1)(set).zip(l1_stateArray(1)(set)).map {
+        case (l1_tag, l1_state) =>
+          tag === l1_tag && l1_state =/= MetaData.INVALID
+      }
+
+      val hit1 = l1_hit_vec_1.reduce(_ || _)
+      val way1 = OHToUInt(l1_hit_vec_1)
+
+      assert(PopCount(l1_hit_vec_0) <= 1.U)
+      assert(PopCount(l1_hit_vec_1) <= 1.U)
+
       assert(!(hit0 && l2_stateArray(0)(set)(way0) === state1 &&
         hit1 && l2_stateArray(1)(set)(way1) === state2))
     }
@@ -256,19 +263,23 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
     def l1l2_inclusive(addr: UInt): Unit = {
       val (l1_tag, l1_set, l1_offset) = parseL1Address(addr)
       val (l2_tag, l2_set, l2_offset) = parseL2Address(addr)
-      val l1_match_tag = l1_tagArray(0)(l1_set).map(_ === l1_tag)
-      val l1_hit = l1_match_tag.reduce(_ || _)
-      val l1_way = MuxCase(0.U, l1_match_tag.zipWithIndex.map {
-        case (matched, indx) =>
-          matched -> indx.U
-      })
+      
+      val l1_hit_vec = l1_tagArray(0)(l1_set).zip(l1_stateArray(0)(l1_set)).map {
+        case (tag, state) =>
+          tag === l1_tag && state =/= MetaData.INVALID
+      }
+      val l1_hit = l1_hit_vec.reduce(_ || _)
+      val l1_way = OHToUInt(l1_hit_vec)
 
-      val l2_match_tag = l2_tagArray(0)(l2_set).map(_ === l2_tag)
-      val l2_hit = l2_match_tag.reduce(_ || _)
-      val l2_way = MuxCase(0.U, l2_match_tag.zipWithIndex.map {
-        case (matched, indx) =>
-          matched -> indx.U
-      })
+      val l2_hit_vec = l2_tagArray(0)(l2_set).zip(l2_stateArray(0)(l2_set)).map {
+        case (tag, state) =>
+          tag === l2_tag && state =/= MetaData.INVALID
+      }
+      val l2_hit = l2_hit_vec.reduce(_ || _)
+      val l2_way = OHToUInt(l2_hit_vec)
+
+      assert(PopCount(l1_hit_vec) <= 1.U)
+      assert(PopCount(l2_hit_vec) <= 1.U)
 
       when(l1_hit && l1_stateArray(0)(l1_set)(l1_way) =/= MetaData.INVALID) {
         assert(l2_hit && l2_stateArray(0)(l2_set)(l2_way) =/= MetaData.INVALID)
@@ -281,19 +292,25 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
 
     def l2_consistency(addr: UInt): Unit = {
       val (tag, set, offset) = parseL2Address(addr)
-      val match_tag0 = l2_tagArray(0)(set).map(_ === tag)
-      val match_tag1 = l2_tagArray(1)(set).map(_ === tag)
-      val hit0 = match_tag0.reduce(_ || _)
-      val hit1 = match_tag1.reduce(_ || _)
-      val way0 = MuxCase(0.U, match_tag0.zipWithIndex.map {
-        case (matched, indx) =>
-          matched -> indx.U
-      })
 
-      val way1 = MuxCase(0.U, match_tag1.zipWithIndex.map {
-        case (matched, indx) =>
-          matched -> indx.U
-      })
+      val l2_hit_vec_0 = l2_tagArray(0)(set).zip(l2_stateArray(0)(set)).map {
+        case (l2_tag, l2_state) =>
+          tag === l2_tag && l2_state =/= MetaData.INVALID
+      }
+
+      val hit0 = l2_hit_vec_0.reduce(_ || _)
+      val way0 = OHToUInt(l2_hit_vec_0)
+
+      val l2_hit_vec_1 = l2_tagArray(1)(set).zip(l2_stateArray(1)(set)).map {
+        case (l2_tag, l2_state) =>
+          tag === l2_tag && l2_state =/= MetaData.INVALID
+      }
+
+      val hit1 = l2_hit_vec_1.reduce(_ || _)
+      val way1 = OHToUInt(l2_hit_vec_1)
+
+      assert(PopCount(l2_hit_vec_0) <= 1.U)
+      assert(PopCount(l2_hit_vec_1) <= 1.U)
 
       val arrayIdx0 = Cat(way0, set)
       val arrayIdx1 = Cat(way1, set)
@@ -308,9 +325,9 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       l2_consistency(0.U(32.W))
     }
 
-    // mutual_specs()
-    // inclusive_spec()
-    // consistency_spec()
+    mutual_specs()
+    inclusive_spec()
+    consistency_spec()
   }
 }
 

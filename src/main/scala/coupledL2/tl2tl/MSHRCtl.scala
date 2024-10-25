@@ -210,10 +210,10 @@ class MSHRCtl(implicit p: Parameters) extends L2Module with Formal {
         timer := timer + 1.U
       }
       if(cacheParams.prefetch.isEmpty) {
-        // assert(timer <= 1000.U, "TimeOut")
-        when(m.io.status.valid) {
-          assert(m.acquire_period <= 1000.U)
-        }
+        assert(timer <= 1000.U, "TimeOut")
+        // when(m.io.status.valid) {
+        //   assert(m.acquire_period <= 1000.U)
+        // }
       }
       val enable = m.io.status.valid && m.io.status.bits.will_free
       XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10),
