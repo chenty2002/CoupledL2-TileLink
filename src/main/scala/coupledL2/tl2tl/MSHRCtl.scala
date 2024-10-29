@@ -202,23 +202,13 @@ class MSHRCtl(implicit p: Parameters) extends L2Module with Formal {
     XSPerfHistogram(cacheParams, "release_period", release_period, release_period_en, start, stop, step)
     XSPerfHistogram(cacheParams, "probe_period", probe_period, probe_period_en, start, stop, step)
 
-    val timers = RegInit(VecInit(Seq.fill(mshrsAll)(0.U(64.W))))
-    for (((timer, m), i) <- timers.zip(mshrs).zipWithIndex) {
-      when (m.io.alloc.valid) {
-        timer := 1.U
-      }.elsewhen (m.io.status.valid) {
-        timer := timer + 1.U
-      }
+    mshrs.foreach { m =>
       if(cacheParams.prefetch.isEmpty) {
-        assert(timer <= 1000.U, "TimeOut")
-        // when(m.io.status.valid) {
-        //   assert(m.acquire_period <= 1000.U)
-        // }
+        assertLivenessTimer(m.io.status.valid, m.io.alloc.valid, 1000)
+        when(m.io.status.valid) {
+          assert(m.acquire_period <= 1000.U)
+        }
       }
-      val enable = m.io.status.valid && m.io.status.bits.will_free
-      XSPerfHistogram(cacheParams, "mshr_latency_" + Integer.toString(i, 10),
-        timer, enable, 0, 300, 10)
-      XSPerfMax(cacheParams, "mshr_latency", timer, enable)
     }
   }
 }

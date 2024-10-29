@@ -67,7 +67,6 @@ trait Formal {
     when(next(n - 1)) {
       assert(asert, msg)
     }
-
   }
 
   def past[T <: Data](value: T, n: Int)(block: T => Any)
@@ -77,12 +76,6 @@ trait Formal {
       block(Delay(value, n))
     }
   }
-  //
-  //  def freeze[T <: Data](value: T, n: Int)(block: T => Any)
-  //                       (implicit sourceInfo: SourceInfo,
-  //                        compileOptions: CompileOptions): Unit = {
-  //    past(value, n)(block)
-  //  }
 
   def initialReg(w: Int, v: Int): InitialReg = {
     val reg = Module(new InitialReg(w, v))
@@ -96,5 +89,17 @@ trait Formal {
     cst.io.out
   }
 
-
+  def assertLivenessTimer(cond: Bool, reset: Bool, n: Int, msg: String = "")
+                         (implicit sourceInfo: SourceInfo,
+                          compileOptions: CompileOptions): Unit = {
+    val timer = RegInit(0.U(64.W))
+    when(reset) {
+      timer := 1.U
+    }.elsewhen(cond) {
+      timer := timer + 1.U
+    }
+    when(notChaos) {
+      cassert(timer <= n.U, msg)
+    }
+  }
 }

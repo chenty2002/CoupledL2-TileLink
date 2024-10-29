@@ -9,8 +9,19 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks._
 
 object Check {
-  def Hello() = {
-    println("hello")
+  private def jasperGold(files: Array[String]): String = {
+    s"""analyze -sv ${files.reduce((a, b) => s"$a $b")}
+       |elaborate
+       |reset reset
+       |clock clock
+       |
+       |set_prove_time_limit 168h
+       |set_proofgrid_per_engine_max_jobs 64
+       |set_engine_threads 16
+       |
+       |prove -all
+       |report
+       |""".stripMargin
   }
 
   private def sby(mode: String = "prove", engines: String = "smtbmc boolector", depthStr: String, files: Array[String], module: String) = {
@@ -41,20 +52,45 @@ object Check {
        |""".stripMargin
   }
 
+  def jg[T <: RawModule](dutGen: () => T) = {
+    checkJG(dutGen)
+  }
+
   def bmc[T <: RawModule](dutGen: () => T, depth: Int = 20) = {
-    check(dutGen, "bmc", depth)
+    checkYosys(dutGen, "bmc", depth)
   }
 
   def kInduction[T <: RawModule](dutGen: () => T, depth: Int = 20) = {
-    check(dutGen, "prove", depth)
+    checkYosys(dutGen, "prove", depth)
   }
 
   def pdr[T <: RawModule](dutGen: () => T, depth: Int = 20) = {
-    check(dutGen, "abcPdr", depth)
+    checkYosys(dutGen, "abcPdr", depth)
   }
 
+  private def checkJG[T <: RawModule](dutGen: () => T) = {
+    generateRTL(dutGen, "_jg")
+    val mod = modName(dutGen)
+    val jgTCL = s"$mod.tcl"
+    val dirName = mod + "_jg"
 
-  private def check[T <: RawModule](dutGen: () => T, mode: String, depth: Int) = {
+    val dir = new File(dirName)
+    val files = dir.listFiles.filter(_.getName.endsWith(".sv")).map(_.getName)
+
+    if (dir.listFiles.exists(_.getName.equals(mod))) {
+      new ProcessBuilder("rm", "-rf", "./" + mod).directory(dir).start()
+    }
+
+    val jgFileContent = jasperGold(files)
+    new PrintWriter(dirName + "/" + jgTCL) {
+      write(jgFileContent)
+      close()
+    }
+
+    new ProcessBuilder("jg", "-allow_unsupported_OS", "-tcl", jgTCL).directory(dir).start()
+  }
+
+  private def checkYosys[T <: RawModule](dutGen: () => T, mode: String, depth: Int) = {
     generateRTL(dutGen, "_" + mode)
     val mod = modName(dutGen)
     val sbyFileName = s"$mod.sby"
@@ -111,7 +147,6 @@ object Check {
     }
   }
 
-
   def generateRTL[T <: RawModule] (dutGen: () => T, targetDirSufix: String = "_build", outputFile: String = "") = {
     val name = modName(dutGen)
     val targetDir = name + targetDirSufix
@@ -132,7 +167,6 @@ object Check {
       print(rtl);
       close()
     }
-//    rtl
   }
 
   private def processResultHandler(process: Process, name: String, dir: String): Unit = {
