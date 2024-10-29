@@ -228,24 +228,24 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
     def l2_mutual(addr: UInt, state1: UInt, state2: UInt): Unit = {
       val (tag, set, offset) = parseL2Address(addr)
 
-      val l1_hit_vec_0 = l1_tagArray(0)(set).zip(l1_stateArray(0)(set)).map {
-        case (l1_tag, l1_state) =>
-          tag === l1_tag && l1_state =/= MetaData.INVALID
+      val l2_hit_vec_0 = l2_tagArray(0)(set).zip(l2_stateArray(0)(set)).map {
+        case (l2_tag, l2_state) =>
+          tag === l2_tag && l2_state =/= MetaData.INVALID
       }
 
-      val hit0 = l1_hit_vec_0.reduce(_ || _)
-      val way0 = OHToUInt(l1_hit_vec_0)
+      val hit0 = l2_hit_vec_0.reduce(_ || _)
+      val way0 = OHToUInt(l2_hit_vec_0)
 
-      val l1_hit_vec_1 = l1_tagArray(1)(set).zip(l1_stateArray(1)(set)).map {
-        case (l1_tag, l1_state) =>
-          tag === l1_tag && l1_state =/= MetaData.INVALID
+      val l2_hit_vec_1 = l2_tagArray(1)(set).zip(l2_stateArray(1)(set)).map {
+        case (l2_tag, l2_state) =>
+          tag === l2_tag && l2_state =/= MetaData.INVALID
       }
 
-      val hit1 = l1_hit_vec_1.reduce(_ || _)
-      val way1 = OHToUInt(l1_hit_vec_1)
+      val hit1 = l2_hit_vec_1.reduce(_ || _)
+      val way1 = OHToUInt(l2_hit_vec_1)
 
-      assert(PopCount(l1_hit_vec_0) <= 1.U)
-      assert(PopCount(l1_hit_vec_1) <= 1.U)
+      assert(PopCount(l2_hit_vec_0) <= 1.U)
+      assert(PopCount(l2_hit_vec_1) <= 1.U)
 
       assert(!(hit0 && l2_stateArray(0)(set)(way0) === state1 &&
         hit1 && l2_stateArray(1)(set)(way1) === state2))
