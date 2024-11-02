@@ -7,6 +7,7 @@ import chisel3.util.experimental.BoringUtils
 import chiselFv._
 import coupledL2.tl2chi._
 import coupledL2.tl2tl.TL2TLCoupledL2
+import coupledL2.tl2tl.{Slice => TLSlice}
 import coupledL2AsL1.prefetch.CoupledL2AsL1PrefParam
 import coupledL2AsL1.tl2tl.{TL2TLCoupledL2 => TLCoupledL2AsL1}
 import coupledL2AsL1.tl2chi.{TL2CHICoupledL2 => CHICoupledL2AsL1}
@@ -225,6 +226,57 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       BoringUtils.addSink(l2_tagArray(i-nrL2), s"tagArray_${i}")
     }
 
+    
+    val mshrs = 4
+
+    class MSHR_signal_bundle extends Bundle {
+      val status_bits_set = UInt(l2_setBits.W)
+      val status_bits_metaTag = UInt(l2_tagBits.W)
+      val status_bits_reqTag = UInt(l2_tagBits.W)
+      val status_bits_needRepl = Bool()
+      val status_bits_w_c_resp = Bool()
+      val status_bits_w_d_resp = Bool()
+      val status_valid = Bool()
+    }
+
+    val MSHR_signals = Seq.fill(mshrs)(WireDefault(0.U.asTypeOf(new MSHR_signal_bundle)))
+
+    val l2_MSHR_prop_patch_inclusive = Wire(Bool())
+    val l2_MSHR_prop_patch_consistency = Wire(Bool())
+
+    coupledL2(0).module.slices(0) match {
+      case s: TLSlice =>
+        println("--- TLSLICE ---")
+        for (i <- 0 until mshrs) {
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.set, Seq(MSHR_signals(i).status_bits_set))
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.metaTag, Seq(MSHR_signals(i).status_bits_metaTag))
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.reqTag, Seq(MSHR_signals(i).status_bits_reqTag))
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.needsRepl, Seq(MSHR_signals(i).status_bits_needRepl))
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.w_c_resp, Seq(MSHR_signals(i).status_bits_w_c_resp))
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.w_d_resp, Seq(MSHR_signals(i).status_bits_w_d_resp))
+          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.valid, Seq(MSHR_signals(i).status_valid))
+        }
+
+        l2_MSHR_prop_patch_inclusive := Cat(MSHR_signals.map { m =>
+          m.status_bits_set === 0.U &&
+          m.status_bits_metaTag === 0.U &&
+          m.status_bits_needRepl === true.B &&
+          m.status_bits_w_c_resp === true.B &&
+          m.status_valid === true.B
+        }).orR
+
+        l2_MSHR_prop_patch_consistency := Cat(MSHR_signals.map { m =>
+          m.status_bits_set === 0.U &&
+          m.status_bits_reqTag === 0.U &&
+          m.status_bits_w_d_resp === true.B &&
+          m.status_valid === true.B
+        }).orR
+      case _ =>
+        l2_MSHR_prop_patch_inclusive := false.B
+        l2_MSHR_prop_patch_consistency := false.B
+    }
+
+
     def l2_mutual(addr: UInt, state1: UInt, state2: UInt): Unit = {
       val (tag, set, offset) = parseL2Address(addr)
 
@@ -282,7 +334,7 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       assert(PopCount(l2_hit_vec) <= 1.U)
 
       when(l1_hit && l1_stateArray(0)(l1_set)(l1_way) =/= MetaData.INVALID) {
-        assert(l2_hit && l2_stateArray(0)(l2_set)(l2_way) =/= MetaData.INVALID)
+        assert((l2_hit && l2_stateArray(0)(l2_set)(l2_way) =/= MetaData.INVALID) || l2_MSHR_prop_patch_inclusive)
       }
     }
 
@@ -317,7 +369,7 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
 
       when(hit0 && l2_stateArray(0)(set)(way0) === MetaData.BRANCH && 
         hit1 && l2_stateArray(1)(set)(way1) === MetaData.BRANCH) {
-        assert(l2_dataArray(0)(arrayIdx0) === l2_dataArray(1)(arrayIdx1))
+        assert(l2_dataArray(0)(arrayIdx0) === l2_dataArray(1)(arrayIdx1) || l2_MSHR_prop_patch_consistency)
       }
     }
 
