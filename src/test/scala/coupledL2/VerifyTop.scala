@@ -239,41 +239,45 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       val status_valid = Bool()
     }
 
-    val MSHR_signals = Seq.fill(mshrs)(WireDefault(0.U.asTypeOf(new MSHR_signal_bundle)))
+    val MSHR_signals = Seq.fill(nrL2, mshrs)(WireDefault(0.U.asTypeOf(new MSHR_signal_bundle)))
 
     val l2_MSHR_prop_patch_inclusive = Wire(Bool())
-    val l2_MSHR_prop_patch_consistency = Wire(Bool())
+    val l2_MSHR_prop_patch_consistency = Wire(Vec(2, Bool()))
 
-    coupledL2(0).module.slices(0) match {
-      case s: TLSlice =>
-        println("--- TLSLICE ---")
-        for (i <- 0 until mshrs) {
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.set, Seq(MSHR_signals(i).status_bits_set))
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.metaTag, Seq(MSHR_signals(i).status_bits_metaTag))
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.reqTag, Seq(MSHR_signals(i).status_bits_reqTag))
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.needsRepl, Seq(MSHR_signals(i).status_bits_needRepl))
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.w_c_resp, Seq(MSHR_signals(i).status_bits_w_c_resp))
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.w_d_resp, Seq(MSHR_signals(i).status_bits_w_d_resp))
-          BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.valid, Seq(MSHR_signals(i).status_valid))
-        }
+    for(indx <- 0 until nrL2) {
+      coupledL2(indx).module.slices(0) match {
+        case s: TLSlice =>
+          println("--- TLSLICE ---")
+          for (i <- 0 until mshrs) {
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.set, Seq(MSHR_signals(indx)(i).status_bits_set))
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.metaTag, Seq(MSHR_signals(indx)(i).status_bits_metaTag))
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.reqTag, Seq(MSHR_signals(indx)(i).status_bits_reqTag))
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.needsRepl, Seq(MSHR_signals(indx)(i).status_bits_needRepl))
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.w_c_resp, Seq(MSHR_signals(indx)(i).status_bits_w_c_resp))
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.bits.w_d_resp, Seq(MSHR_signals(indx)(i).status_bits_w_d_resp))
+            BoringUtils.bore(s.mshrCtl.mshrs(i).io.status.valid, Seq(MSHR_signals(indx)(i).status_valid))
+          }
 
-        l2_MSHR_prop_patch_inclusive := Cat(MSHR_signals.map { m =>
-          m.status_bits_set === 0.U &&
-          m.status_bits_metaTag === 0.U &&
-          m.status_bits_needRepl === true.B &&
-          m.status_bits_w_c_resp === true.B &&
-          m.status_valid === true.B
-        }).orR
+          if(indx == 0) {
+            l2_MSHR_prop_patch_inclusive := Cat(MSHR_signals(indx).map { m =>
+              m.status_bits_set === 0.U &&
+              m.status_bits_metaTag === 0.U &&
+              m.status_bits_needRepl === true.B &&
+              m.status_bits_w_c_resp === true.B &&
+              m.status_valid === true.B
+            }).orR
+          }
 
-        l2_MSHR_prop_patch_consistency := Cat(MSHR_signals.map { m =>
-          m.status_bits_set === 0.U &&
-          m.status_bits_reqTag === 0.U &&
-          m.status_bits_w_d_resp === true.B &&
-          m.status_valid === true.B
-        }).orR
-      case _ =>
-        l2_MSHR_prop_patch_inclusive := false.B
-        l2_MSHR_prop_patch_consistency := false.B
+          l2_MSHR_prop_patch_consistency(indx) := Cat(MSHR_signals(indx).map { m =>
+            m.status_bits_set === 0.U &&
+            m.status_bits_reqTag === 0.U &&
+            m.status_bits_w_d_resp === true.B &&
+            m.status_valid === true.B
+          }).orR
+        case _ =>
+          l2_MSHR_prop_patch_inclusive := false.B
+          l2_MSHR_prop_patch_consistency(indx) := false.B
+      }
     }
 
 
@@ -369,7 +373,9 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
 
       when(hit0 && l2_stateArray(0)(set)(way0) === MetaData.BRANCH && 
         hit1 && l2_stateArray(1)(set)(way1) === MetaData.BRANCH) {
-        assert(l2_dataArray(0)(arrayIdx0) === l2_dataArray(1)(arrayIdx1) || l2_MSHR_prop_patch_consistency)
+        assert(l2_dataArray(0)(arrayIdx0) === l2_dataArray(1)(arrayIdx1) || 
+               l2_MSHR_prop_patch_consistency(0) || 
+               l2_MSHR_prop_patch_consistency(1))
       }
     }
 
