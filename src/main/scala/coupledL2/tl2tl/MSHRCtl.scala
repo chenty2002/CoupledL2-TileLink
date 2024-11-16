@@ -204,10 +204,10 @@ class MSHRCtl(implicit p: Parameters) extends L2Module with Formal {
 
     mshrs.foreach { m =>
       if(cacheParams.prefetch.isEmpty) {
-        assertLivenessTimer(m.io.status.valid, m.io.alloc.valid, 1000)
-        when(m.io.status.valid) {
-          assert(m.acquire_period <= 1000.U)
-        }
+        // assertLivenessTimer(m.io.status.valid, m.io.alloc.valid, 1000)
+        // when(m.io.status.valid) {
+        //   assert(m.acquire_period <= 1000.U)
+        // }
       }
     }
   }

@@ -84,8 +84,8 @@ object AutoVerify_L2L3L2 extends App {
     )
   })
 
-  val suffix = "acquire"
-  val path = "/home/lyj238/VerifyL2"
+  val suffix = "consistency"
+  val path = "/home/lyj238/VerifyL2/assume"
   val top = DisableMonitors(p => LazyModule(new VerifyTop_L2L3L2()(p)))(config)
 
   (new ChiselStage).emitSystemVerilog(

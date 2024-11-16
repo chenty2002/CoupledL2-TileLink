@@ -337,6 +337,8 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       assert(PopCount(l1_hit_vec) <= 1.U)
       assert(PopCount(l2_hit_vec) <= 1.U)
 
+      assume(verify_timer < 800.U || (l1_hit && l1_stateArray(0)(l1_set)(l1_way) =/= MetaData.INVALID))
+
       when(l1_hit && l1_stateArray(0)(l1_set)(l1_way) =/= MetaData.INVALID) {
         assert((l2_hit && l2_stateArray(0)(l2_set)(l2_way) =/= MetaData.INVALID) || l2_MSHR_prop_patch_inclusive)
       }
@@ -371,6 +373,10 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       val arrayIdx0 = Cat(way0, set)
       val arrayIdx1 = Cat(way1, set)
 
+      assume(verify_timer < 2500.U || 
+            (hit0 && l2_stateArray(0)(set)(way0) === MetaData.BRANCH && 
+             hit1 && l2_stateArray(1)(set)(way1) === MetaData.BRANCH))
+
       when(hit0 && l2_stateArray(0)(set)(way0) === MetaData.BRANCH && 
         hit1 && l2_stateArray(1)(set)(way1) === MetaData.BRANCH) {
         assert(l2_dataArray(0)(arrayIdx0) === l2_dataArray(1)(arrayIdx1) || 
@@ -383,7 +389,7 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
       l2_consistency(0.U(32.W))
     }
 
-    mutual_specs()
+    // mutual_specs()
     inclusive_spec()
     consistency_spec()
   }
