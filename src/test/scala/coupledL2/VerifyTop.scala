@@ -106,7 +106,7 @@ class VerifyTop_L2L3L2()(implicit p: Parameters) extends LazyModule {
           name = s"l2",
           sets = 4,
           ways = 2 + 2,
-          blockGranularity = log2Ceil(2)
+          blockGranularity = log2Ceil(4)
         ),
       ),
       echoField = Seq(DirtyField()),
